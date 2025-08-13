@@ -120,7 +120,7 @@
         .fixed {
             padding-top: 20px;
             width: 230px;
-            height: 190px;
+            height: 250px;
             position: fixed;
             background-color: #f3f3f3;
 
@@ -135,7 +135,7 @@
         }
 
         .his {
-            margin-top: 200px;
+            margin-top: 250px;
 
         }
 
@@ -162,6 +162,25 @@
             border: none;
 
 
+        }
+
+        .se {
+            width: 80%;
+            margin: 10px 0;
+            font-size: 15px;
+            background-color: #f3f3f3;
+            border-radius: 50px;
+            border: 2px solid #000000;
+
+        }
+
+        #chat-search {
+            width: 70%;
+            padding: 10px;
+            font-size: 14px;
+            background-color: #f3f3f3;
+            border: none;
+            border-radius: 50px;
         }
 
         .panel-b i {
@@ -306,6 +325,8 @@
         .message.bot {
             max-width: 100%;
             margin-right: auto;
+            padding: 0;
+            padding-bottom: 40px;
 
             text-align: left
         }
@@ -325,16 +346,13 @@
 
         .input-wrapper {
             position: relative;
-            width: 100%
+            width: 100%;
         }
 
-        #user-input {
-
-            height: 120px;
-        }
 
         .editable-input {
-            max-height: 176px;
+            min-height: 126px;
+            max-height: 300px;
             padding: 30px 20px 12px 16px;
             border-radius: 28px;
             border: 1px solid #ddd;
@@ -402,6 +420,24 @@
             border-radius: 8px
         }
 
+        body.dark-theme .se {
+
+            background-color: #000000;
+            border: 2px solid #ffffff;
+
+
+
+        }
+
+        body.dark-theme #chat-search {
+            border: 2px solid #ffffff;
+            color: #c4d6e9;
+
+            background-color: #000000;
+            border: none;
+
+        }
+
         /* dark */
         body.dark-theme {
             background: #0b1220;
@@ -419,6 +455,11 @@
 
         body.dark-theme .fixed {
             background: #0b1220;
+        }
+
+        body.dark-theme #chat-search {
+            background: #0b1220;
+
         }
 
         body.dark-theme .center-heading {
@@ -448,14 +489,20 @@
         body.dark-theme textarea {
             background: #08101a;
             color: #ddd;
-            border: 1px solid #2b3a4a
+            border: 1px solid #c4d6e9
         }
 
         @media (max-width:754px) {
             .center-heading {
                 font-size: 25px;
                 top: 35%;
-                padding-top: 300px;
+                padding-top: 150px;
+
+
+            }
+
+            .top {
+                height: 50px;
 
             }
 
@@ -474,7 +521,7 @@
 
             .chat-container {
                 margin-left: 0;
-                height: calc(100vh - 200px);
+                height: calc(100vh - 120px);
                 overflow-y: auto;
             }
 
@@ -485,10 +532,15 @@
             .fixed {
                 border-right: 1px solid #eee;
                 width: 200px;
-                height: 190px;
+                height: 240px;
                 position: fixed;
                 background-color: #f3f3f3;
 
+            }
+
+            .editable-input {
+                min-height: 80px;
+                max-height: 250px;
 
 
             }
@@ -506,6 +558,7 @@
 
 
 
+
         }
     </style>
 </head>
@@ -516,7 +569,7 @@
         <div>
             <button id="settings-btn" class="panel-btn"><i class="bi bi-sliders"></i></button>
         </div>
-        <div class="ai"><img src="/zara.png"></i></div>
+        <div class="ai"><img src="zara.png"></i></div>
         <div class="top-bar">
             <button id="theme" title="Toggle theme"><i class="bi bi-brightness-low"></i></button>
         </div>
@@ -531,8 +584,16 @@
             </div>
             <button id="new-chat-btn" class="panel-btn"><i class="bi bi-plus-circle"></i> New Chat</button>
             <label><input type="checkbox" id="dark-mode-toggle"> Dark Mode</label>
+            <!-- Search input box for chat history -->
+
             <h3 style="margin-bottom: 10px;"><i style="padding-right: 10px; " class="bi bi-pencil-square"></i>Chat
                 History</h3>
+            <div class="se">
+                <input type="text" id="chat-search" placeholder="Search chats...">
+                <i class="bi bi-search"></i>
+            </div>
+
+
             <hr>
 
         </div>
@@ -582,7 +643,8 @@
 
         (function () {
             // Elements
-
+            //  const chat = chatHistory.getElementsByTagName('li');
+            const chatSearch = document.getElementById('chat-search');
             const micBtn = document.querySelector('.mic-icon');
             const siriWrap = document.getElementById('siriWave');
             const form = document.getElementById("chat-form");
@@ -669,6 +731,19 @@
                     chatHistoryList.appendChild(li);
                 });
             }
+            // --- Chat history search ---
+            if (chatSearch) {
+                chatSearch.addEventListener('input', function () {
+                    const filter = chatSearch.value.toLowerCase();
+                    const items = chatHistoryList.getElementsByTagName('li');
+                    for (let i = 0; i < items.length; i++) {
+                        const span = items[i].querySelector('span');
+                        const text = span ? span.textContent || span.innerText : '';
+                        items[i].style.display = text.toLowerCase().includes(filter) ? '' : 'none';
+                    }
+                });
+            }
+
             // --- Siri Wave setup ---
 
             // 24 bars banao different delay/amp ke saath
@@ -711,6 +786,9 @@
                     recognition.start(); // 🎤 start listening
                 } else {
                     // wave stop
+                    stopRecognition();
+                }
+                function stopRecognition() {
                     siriWrap.classList.remove('active');
                     micBtn.classList.remove('mic-listening');
                     recognition.stop();
@@ -719,37 +797,41 @@
                         waveEl = null;
                     }
                 }
-                // Speech end (user stops talking)
+
                 recognition.onresult = async (event) => {
                     const transcript = event.results[event.results.length - 1][0].transcript.trim();
                     console.log("You said:", transcript);
 
-                    // AI ko bhejna
+                    // AI bolne se pehle recognition ko rok do
+                    recognition.abort();
+
                     try {
                         const result = await model.generateContent(transcript);
                         const reply = result.response.text();
 
-                        // Sirf bolkar sunao
                         const utterance = new SpeechSynthesisUtterance(reply);
                         utterance.lang = "hi-IN";
+
+                        utterance.onend = () => {
+                            // Jab AI bolna khatam kare, tab dobara recognition start karo
+                            if (isListening) recognition.start();
+                        };
+
                         speechSynthesis.speak(utterance);
 
                     } catch (err) {
                         console.error("AI error:", err);
+                        if (isListening) recognition.start();
                     }
                 };
 
-                // Agar khud band ho jaye to dobara start
                 recognition.onend = () => {
-                    if (isListening) {
+                    // Agar AI bol raha ho to start mat karna, sirf user stop ke liye
+                    if (isListening && !speechSynthesis.speaking) {
                         recognition.start();
                     }
                 };
-                // Siri bars toggle (अगर पहले से है)
-                siriWrap.classList.toggle('active', isListening);
-                micBtn.classList.toggle('mic-listening', isListening);
             });
-
 
 
 
@@ -782,6 +864,7 @@
                 div.innerText = text;
                 chatContainer.appendChild(div);
                 chatContainer.scrollTop = chatContainer.scrollHeight;
+                return div;
             }
 
             // Save message to storage for current chat
@@ -933,6 +1016,29 @@
                     saveMessageToChat({ type: "text", sender: "user", text: userText });
                 }
 
+                // ✅ Word-by-word typing effect (with proper spaces)
+                async function typeWriterEffect(element, text, speed = 200) {
+                    element.innerText = "";
+                    const words = text.split(" "); // split by space
+                    for (let i = 0; i < words.length; i++) {
+                        element.innerText += (i === 0 ? "" : " ") + words[i];
+                        await new Promise(resolve => setTimeout(resolve, speed));
+                        chatContainer.scrollTop = chatContainer.scrollHeight;
+                    }
+                }
+                // ✅ Markdown cleaner function
+
+                function cleanMarkdown(text) {
+                    return text
+                        .replace(/^#+\s?/gm, '')
+                        .replace(/\*\*(.*?)\*\*/g, '$1')
+                        .replace(/\*(.*?)\*/g, '$1')
+                        .replace(/_(.*?)_/g, '$1')
+                        .replace(/^\s*[-*]\s+/gm, '• ')
+                        .replace(/`{3}[\s\S]*?`{3}/g, '')
+                        .replace(/`(.*?)`/g, '$1')
+                        .trim();
+                }
                 // show bot thinking
                 const botDiv = document.createElement("div");
                 botDiv.classList.add("message", "bot");
@@ -944,7 +1050,9 @@
 
                 try {
                     const result = await model.generateContent(userText);
-                    const reply = result.response.text();
+                    let reply = result.response.text();
+                    reply = cleanMarkdown(reply); // ✅ Markdown clean
+                    await typeWriterEffect(botDiv, reply, 40); // 50ms per word
                     botDiv.innerText = reply;
                     // 🔹 Bot ka reply bhi storage me save karo
                     saveMessageToChat({ type: "text", sender: "bot", text: reply });
