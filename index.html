@@ -249,12 +249,14 @@
 
 
         .top {
+            background-color: #ffffff;
+            width: 100%;
             display: flex;
             align-items: center;
             justify-content: space-between;
             padding: 10px 12px;
             box-shadow: 0 1px 4px rgba(0, 0, 0, .06);
-            position: relative;
+            position: fixed;
         }
 
         .ai {
@@ -276,11 +278,13 @@
         }
 
         .chat-container {
-            height: calc(100vh - 220px);
+            padding: 20px;
+            padding-top: 140px;
+            height: calc(100vh - 140px);
             max-width: 800px;
             width: 100%;
             margin: 0 auto;
-            padding: 20px;
+
             display: flex;
             flex-direction: column;
             gap: 0px;
@@ -301,7 +305,7 @@
             color: rgb(26, 1, 1);
             font-size: 40px;
             padding: 10px;
-            padding-top: 300px;
+            padding-top: 250px;
 
         }
 
@@ -474,6 +478,7 @@
         }
 
         body.dark-theme .top {
+            background-color: #0b1220;
             box-shadow: 1px 0px 7px#ffffff;
         }
 
@@ -520,8 +525,10 @@
             }
 
             .chat-container {
+                padding-bottom: 100px;
+                padding-top: 80px;
                 margin-left: 0;
-                height: calc(100vh - 120px);
+                height: calc(100vh - 50px);
                 overflow-y: auto;
             }
 
@@ -636,11 +643,11 @@
 
     <script type="module">
         import { GoogleGenerativeAI } from "https://esm.run/@google/generative-ai";
+        import { GoogleGenAI, Modality } from "https://esm.run/@google/genai";
 
         const API_KEY = "AIzaSyDuQKgj8UdV-pyS26mQnwwzY7ROwV1i_kk"; // ⚠️ Replace with your actual API key
         const genAI = new GoogleGenerativeAI(API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
+        const textModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
         (function () {
             // Elements
             //  const chat = chatHistory.getElementsByTagName('li');
@@ -668,6 +675,8 @@
             let currentChat = null;
             let firstMessageSent = false;
 
+
+
             // Helpers: storage
             function loadChatsFromStorage() {
                 try {
@@ -685,6 +694,7 @@
                     console.error("Failed to save chatsData:", e);
                 }
             }
+
 
             // Render chat history list
             function renderChatHistory() {
@@ -834,7 +844,57 @@
             });
 
 
+            // --- Fullscreen Image Helper ---
+            function showImageFullscreen(src) {
+                const overlay = document.createElement("div");
+                overlay.style.position = "fixed";
+                overlay.style.top = "0";
+                overlay.style.left = "0";
+                overlay.style.width = "100%";
+                overlay.style.height = "100%";
+                overlay.style.backgroundColor = "rgba(0,0,0,0.85)";
+                overlay.style.display = "flex";
+                overlay.style.alignItems = "center";
+                overlay.style.justifyContent = "center";
+                overlay.style.cursor = "zoom-out";
+                overlay.style.zIndex = "9999";
+                overlay.style.transition = "opacity 0.3s ease";
+                overlay.style.opacity = "0";
 
+                const img = document.createElement("img");
+                img.src = src;
+                img.style.maxWidth = "90%";
+                img.style.maxHeight = "90%";
+                img.style.borderRadius = "10px";
+                img.style.boxShadow = "0 0 20px rgba(0,0,0,0.5)";
+                img.style.transform = "scale(0.9)";
+                img.style.transition = "transform 0.3s ease";
+                overlay.appendChild(img);
+
+                overlay.addEventListener("click", () => {
+                    img.style.transform = "scale(0.9)";
+                    overlay.style.opacity = "0";
+                    setTimeout(() => overlay.remove(), 300);
+                });
+
+                document.body.appendChild(overlay);
+                requestAnimationFrame(() => {
+                    overlay.style.opacity = "1";
+                    img.style.transform = "scale(1)";
+                });
+            }
+
+            // --- Make all images in a container clickable ---
+            function makeImagesFullscreen(container) {
+                const imgs = container.querySelectorAll("img");
+                imgs.forEach(img => {
+                    img.style.cursor = "zoom-in";
+                    if (!img.dataset.fullscreen) { // avoid duplicate listeners
+                        img.dataset.fullscreen = "true";
+                        img.addEventListener("click", () => showImageFullscreen(img.src));
+                    }
+                });
+            }
             // Load a chat into UI
             function loadChat(chatId) {
                 const chatObj = chats.find(c => c.id === chatId);
@@ -853,6 +913,7 @@
                         addMessageToUI(m.sender, m.text);
                     }
                 });
+                makeImagesFullscreen(chatContainer); // ✅ Fullscreen listener add
                 welcomeHeading.style.display = "none";
                 chatContainer.scrollTop = chatContainer.scrollHeight;
             }
@@ -956,7 +1017,70 @@
                 chatContainer.innerHTML = "";
                 welcomeHeading.style.display = "none";
             });
+            async function typeWriterEffect(element, text, speed = 200) {
+                element.innerText = "";
+                const words = text.split(" "); // split by space
+                for (let i = 0; i < words.length; i++) {
+                    element.innerText += (i === 0 ? "" : " ") + words[i];
+                    await new Promise(resolve => setTimeout(resolve, speed));
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                }
+            }
+            function cleanMarkdown(text) {
+                return text
+                    .replace(/^#+\s?/gm, '')
+                    .replace(/\*\*(.*?)\*\*/g, '$1')
+                    .replace(/\*(.*?)\*/g, '$1')
+                    .replace(/_(.*?)_/g, '$1')
+                    .replace(/^\s*[-*]\s+/gm, '• ')
+                    .replace(/`{3}[\s\S]*?`{3}/g, '')
+                    .replace(/`(.*?)`/g, '$1')
+                    .trim();
+            }
 
+            // --- AI Response ---
+            async function generateAIResponse(userText) {
+                try {
+                    const chatObj = chats.find(c => c.id === currentChat);
+                    let historyText = "";
+                    if (chatObj && chatObj.messages.length) {
+                        chatObj.messages.forEach(m => {
+                            if (m.type === "text") {
+                                historyText += `${m.sender === "user" ? "User" : "AI"}: ${m.text}\n`;
+                            }
+                        });
+                    }
+                    const fullPrompt = historyText + `User: ${userText}\nAI:`;
+                    const isImageRequest = /image|चित्र|photo|चित्र बनाओ/i.test(userText);
+
+                    if (isImageRequest) {
+                        const ai = new GoogleGenAI({ apiKey: API_KEY });
+                        const response = await ai.models.generateContent({
+                            model: "gemini-2.0-flash-preview-image-generation",
+                            contents: [{ type: "text", text: fullPrompt }],
+                            config: { responseModalities: [Modality.TEXT, Modality.IMAGE] }
+                        });
+
+                        let replyText = null, replyImage = null;
+                        const parts = response.candidates[0].content.parts;
+                        for (const part of parts) {
+                            if (part.text) replyText = part.text;
+                            if (part.inlineData?.data) replyImage = `data:image/png;base64,${part.inlineData.data}`;
+                            else if (part.imageUri) replyImage = part.imageUri;
+                        }
+                        console.log("Generated Image:", replyImage);
+                        return { text: replyText, image: replyImage };
+                    } else {
+                        const textResult = await textModel.generateContent(fullPrompt);
+                        let replyText = textResult.response.text();
+                        replyText = replyText.replace(/(^#+\s?|`{3}[\s\S]*?`{3}|`)/gm, '').trim();
+                        return { text: replyText, image: null };
+                    }
+                } catch (err) {
+                    console.error("AI Error:", err);
+                    return { text: "Sorry, AI response failed.", image: null };
+                }
+            }
             // Submit form (send)
             form.addEventListener("submit", async (ev) => {
                 ev.preventDefault();
@@ -972,9 +1096,9 @@
                     firstMessageSent = true;
                     setTimeout(() => {
                         chatContainer.scrollTop = chatContainer.scrollHeight;
-                    }, 10); // थोड़ा डिले ताकि DOM अपडेट हो जाए
+                    }, 10); 
                 }
-                // नया मैसेज ब्लॉक बनाओ (इमेज + टेक्स्ट के लिए)
+                
                 const messageBlock = document.createElement("div");
                 messageBlock.style.display = "flex";
                 messageBlock.style.flexDirection = "column";
@@ -983,6 +1107,8 @@
 
                 // message block for images then text
                 // first images
+
+                // --- Show uploaded images ---
                 if (uploadedFiles.length) {
                     for (let file of uploadedFiles) {
                         if (file.type.startsWith("image/")) {
@@ -990,18 +1116,45 @@
                             await new Promise(resolve => {
                                 reader.onload = e => {
                                     const dataUrl = e.target.result;
-                                    // show in UI
                                     const img = document.createElement("img");
+
                                     img.src = dataUrl;
                                     img.style.maxWidth = "240px";
                                     img.style.borderRadius = "10px";
                                     img.style.margin = "6px 0";
                                     img.style.display = "block";
-                                    img.style.marginLeft = "auto"; // user images align right
+                                    img.style.marginLeft = "auto";
+                                    img.style.cursor = "zoom-in";
                                     chatContainer.appendChild(img);
-                                    chatContainer.scrollTop = chatContainer.scrollHeight;
-                                    // save
+                                    // 🔁 Fullscreen click listener 
+                                    img.addEventListener("click", () => showImageFullscreen(img.src));
+
+                                    // --- Download button ---
+                                    const downloadLink = document.createElement("a");
+                                    downloadLink.href = dataUrl;
+                                    downloadLink.download = file.name;
+                                    downloadLink.innerText = "⬇️ Download";
+
+                                    downloadLink.style.display = "inline-block";
+                                    downloadLink.style.margin = "2px 0 8px 4px";
+                                    downloadLink.style.padding = "0";
+                                    downloadLink.style.fontSize = "14px";
+                                    downloadLink.style.color = "#4CAF50";
+                                    downloadLink.style.background = "none";
+                                    downloadLink.style.border = "none";
+                                    downloadLink.style.borderRadius = "0";
+                                    downloadLink.style.textDecoration = "none";
+                                    downloadLink.style.cursor = "pointer";
+                                    downloadLink.style.marginLeft = "auto";
+
+                                    chatContainer.appendChild(downloadLink);
+
+
                                     saveMessageToChat({ type: "image", sender: "user", data: dataUrl });
+                                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                                    uploadedFiles = [];
+                                    previewContainer.innerHTML = "";
+                                    fileInput.value = "";
                                     resolve();
                                 };
                                 reader.readAsDataURL(file);
@@ -1010,65 +1163,73 @@
                     }
                 }
 
+
                 // then text
                 if (userText) {
                     addMessageToUI("user", userText);
                     saveMessageToChat({ type: "text", sender: "user", text: userText });
+                    input.innerText = "";
+                    adjustInputHeight();
                 }
 
                 // ✅ Word-by-word typing effect (with proper spaces)
-                async function typeWriterEffect(element, text, speed = 200) {
-                    element.innerText = "";
-                    const words = text.split(" "); // split by space
-                    for (let i = 0; i < words.length; i++) {
-                        element.innerText += (i === 0 ? "" : " ") + words[i];
-                        await new Promise(resolve => setTimeout(resolve, speed));
-                        chatContainer.scrollTop = chatContainer.scrollHeight;
-                    }
-                }
                 // ✅ Markdown cleaner function
 
-                function cleanMarkdown(text) {
-                    return text
-                        .replace(/^#+\s?/gm, '')
-                        .replace(/\*\*(.*?)\*\*/g, '$1')
-                        .replace(/\*(.*?)\*/g, '$1')
-                        .replace(/_(.*?)_/g, '$1')
-                        .replace(/^\s*[-*]\s+/gm, '• ')
-                        .replace(/`{3}[\s\S]*?`{3}/g, '')
-                        .replace(/`(.*?)`/g, '$1')
-                        .trim();
-                }
                 // show bot thinking
                 const botDiv = document.createElement("div");
                 botDiv.classList.add("message", "bot");
                 botDiv.innerText = "Thinking...";
                 chatContainer.appendChild(botDiv);
                 chatContainer.scrollTop = chatContainer.scrollHeight;
+                // Generate AI response
+                const aiReply = await generateAIResponse(userText);
 
-                // Call backend (if available) — fallback to canned reply
+                // Show text reply
+                if (aiReply.text) {
+                    await typeWriterEffect(botDiv, aiReply.text, 40);
+                    saveMessageToChat({ type: "text", sender: "bot", text: aiReply.text });
+                    // reset inputs
 
-                try {
-                    const result = await model.generateContent(userText);
-                    let reply = result.response.text();
-                    reply = cleanMarkdown(reply); // ✅ Markdown clean
-                    await typeWriterEffect(botDiv, reply, 40); // 50ms per word
-                    botDiv.innerText = reply;
-                    // 🔹 Bot ka reply bhi storage me save karo
-                    saveMessageToChat({ type: "text", sender: "bot", text: reply });
-                } catch (err) {
-                    console.error("AI fetch failed:", err);
-                    botDiv.innerText = "Sorry, AI response failed.";
-                    // Error message bhi save karna ho to
-                    saveMessageToChat({ type: "text", sender: "bot", text: "Sorry, AI response failed." });
                 }
 
-                // reset inputs
-                uploadedFiles = [];
-                previewContainer.innerHTML = "";
-                fileInput.value = "";
-                input.innerText = "";
-                adjustInputHeight();
+                if (aiReply.image) {
+                    // Create wrapper div
+                    const wrapper = document.createElement("div");
+                    wrapper.style.display = "inline-block";
+                    wrapper.style.marginBottom = "10px";
+                    const botImg = document.createElement("img");
+                    botImg.src = aiReply.image;
+                    botImg.style.maxWidth = "240px";
+                    botImg.style.borderRadius = "10px";
+                    botImg.style.margin = "6px 0";
+                    botImg.style.cursor = "zoom-in"
+                    botImg.addEventListener("click", () => showImageFullscreen(botImg.src));
+                    chatContainer.appendChild(botImg);
+
+                    const downloadLink = document.createElement("a");
+                    downloadLink.href = aiReply.image;
+                    downloadLink.download = "AI_Image.png";
+                    downloadLink.innerText = "⬇️ Download";
+                    downloadLink.style.display = "inline-block";
+                    downloadLink.style.margin = "2px 0 8px 4px";
+                    downloadLink.style.padding = "0";
+                    downloadLink.style.fontSize = "14px";
+                    downloadLink.style.color = "#4CAF50";
+                    downloadLink.style.background = "none";
+                    downloadLink.style.border = "none";
+                    downloadLink.style.borderRadius = "0";
+                    downloadLink.style.textDecoration = "none";
+                    downloadLink.style.cursor = "pointer";
+                    downloadLink.style.float = "right";
+
+                    chatContainer.appendChild(downloadLink);
+
+                    saveMessageToChat({ type: "image", sender: "bot", data: aiReply.image }); 
+
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                }
+                // Call backend (if available) — fallback to canned reply
+
             });
 
             // Initialization
