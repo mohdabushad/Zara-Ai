@@ -189,7 +189,7 @@
             width: 257px;
             height: 250px;
             position: fixed;
-            background:   rgba(218, 141, 199, 0.875);
+            background: rgba(218, 141, 199, 0.875);
 
 
         }
@@ -265,7 +265,7 @@
             width: 260px;
             height: 100%;
             background:
-             rgba(218, 141, 199, 0.875);
+                rgba(218, 141, 199, 0.875);
 
             transition: left .25s;
             z-index: 1000;
@@ -303,7 +303,7 @@
         }
 
         #chat-history li {
-            padding: 17px;
+            padding: 8px;
 
             margin-bottom: 6px;
             border-radius: 6px;
@@ -667,7 +667,7 @@
         <div>
             <button id="settings-btn" class="panel-btn"><i class="bi bi-sliders"></i></button>
         </div>
-        <div class="ai"><img src="z.png"></i></div>
+        <div class="ai"><img src="zara.png"></i></div>
         <div class="top-bar">
             <button id="theme" title="Toggle theme"><i class="bi bi-brightness-low"></i></button>
         </div>
@@ -954,7 +954,6 @@
                     .replace(/\n/g, "<br>");
                 return html.trim();
             }
-
             // --- Fullscreen Image Helper ---
             function showImageFullscreen(src) {
                 const overlay = document.createElement("div");
@@ -1194,7 +1193,6 @@
                     });
                 }
 
-                const fullPrompt = historyText + `User: ${userText}\nAI:`;
                 const isImageRequest = /image|चित्र|photo|चित्र बनाओ/i.test(userText);
 
                 // Placeholder show karo
@@ -1202,23 +1200,44 @@
 
                 try {
                     if (isImageRequest) {
+                        // 🔹 Image ke liye sirf current prompt bhejna hai (history nahi)
                         const ai = new GoogleGenAI({ apiKey: API_KEY });
-                        const response = await ai.models.generateContent({
+                        let response = await ai.models.generateContent({
                             model: "gemini-2.0-flash-preview-image-generation",
-                            contents: [{ type: "text", text: fullPrompt }],
+                            contents: [{ type: "text", text: userText }],
                             config: { responseModalities: [Modality.TEXT, Modality.IMAGE] }
                         });
 
                         let replyText = null, replyImage = null;
-                        const parts = response.candidates?.[0]?.content?.parts || [];
+                        let parts = response.candidates?.[0]?.content?.parts || [];
+
                         for (const part of parts) {
                             if (part.text) replyText = cleanMarkdown(part.text);
                             if (part.inlineData?.data) replyImage = `data:image/png;base64,${part.inlineData.data}`;
                             else if (part.imageUri) replyImage = part.imageUri;
                         }
 
+                        // 🔁 Retry agar image na mili
+                        if (!replyImage) {
+                            console.warn("⚠️ No image generated, retrying...");
+                            response = await ai.models.generateContent({
+                                model: "gemini-2.0-flash-preview-image-generation",
+                                contents: [{ type: "text", text: userText }],
+                                config: { responseModalities: [Modality.IMAGE] } // retry me sirf image maango
+                            });
+
+                            parts = response.candidates?.[0]?.content?.parts || [];
+                            for (const part of parts) {
+                                if (part.inlineData?.data) replyImage = `data:image/png;base64,${part.inlineData.data}`;
+                                else if (part.imageUri) replyImage = part.imageUri;
+                            }
+                        }
+
                         return { text: replyText, image: replyImage };
+
                     } else {
+                        // 🔹 Text ke liye history + user input
+                        const fullPrompt = historyText + `User: ${userText}\nAI:`;
                         const textResult = await textModel.generateContent(fullPrompt);
                         let replyText = textResult.response.text();
                         replyText = cleanMarkdown(replyText);
@@ -1232,6 +1251,7 @@
                     if (placeholder) placeholder.remove();
                 }
             }
+
 
 
             // --- AI Response ---
@@ -1255,8 +1275,6 @@
                         chatContainer.scrollTop = chatContainer.scrollHeight;
                     }, 10);
                 }
-
-                // नया मैसेज ब्लॉक बनाओ (इमेज + टेक्स्ट के लिए)
                 const messageBlock = document.createElement("div");
                 messageBlock.style.display = "flex";
                 messageBlock.style.flexDirection = "column";
@@ -1284,7 +1302,7 @@
                                     img.style.marginLeft = "auto";
                                     img.style.cursor = "zoom-in";
                                     chatContainer.appendChild(img);
-                                    // 🔁 Fullscreen click listener इसी वक्त लगाओ
+                                    // 🔁 Fullscreen click listener 
                                     img.addEventListener("click", () => showImageFullscreen(img.src));
 
                                     // --- Download button ---
@@ -1405,4 +1423,3 @@
 </body>
 
 </html>
-
